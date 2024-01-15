@@ -1,3 +1,4 @@
+// derived from https://github.com/deepgram-devs/deepgram-rust-sdk/pull/22
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
@@ -6,8 +7,8 @@ use ezsockets::{
     client::ClientCloseMode, Client, ClientConfig, CloseFrame, MessageStatus, RawMessage,
     SocketConfig, WSError,
 };
-
-use log::{info, error};
+use log::{error, info};
+use rand::Rng;
 use serde_json::{json, Value};
 
 static PATH_TO_FILE: &str = "mkbhd_video.mp3";
@@ -81,6 +82,7 @@ impl STT {
                 heartbeat: Duration::from_secs(11),
                 timeout: Duration::from_secs(30 * 60), // 30 minutes
                 heartbeat_ping_msg_fn: Arc::new(|_t: Duration| {
+                    // really important
                     RawMessage::Text(
                         json!({
                             "type": "KeepAlive",
@@ -90,9 +92,9 @@ impl STT {
                 }),
             })
             .header("Authorization", &format!("Token {}", deepgram_api_key))
-            .query_parameter("model", "enhanced")
-            // .query_parameter("model", "nova-2-conversationalai")
+            .query_parameter("model", "nova-2-conversationalai")
             .query_parameter("smart_format", "true")
+            .query_parameter("version", "latest")
             .query_parameter("filler_words", "true");
 
         let (ws_client, _) =
@@ -110,13 +112,15 @@ impl STT {
 
 #[tokio::main]
 async fn main() -> Result<(), DeepgramError> {
-    pretty_env_logger::formatted_builder().filter_module("deepgram_ws", log::LevelFilter::Info).init();
+    pretty_env_logger::formatted_builder()
+        .filter_module("deepgram_ws", log::LevelFilter::Info)
+        .init();
 
     let (llm_tx, llm_rx) = crossbeam_channel::unbounded::<String>();
 
     let stt = STT::new(llm_tx).await.unwrap();
     let stt = stt.clone();
-    
+
     let send_task = tokio::spawn(send_to_deepgram(stt));
 
     let deepgram_task = tokio::spawn(async move {
@@ -132,11 +136,12 @@ async fn main() -> Result<(), DeepgramError> {
 }
 
 async fn send_to_deepgram(stt: STT) -> Result<(), DeepgramError> {
-    tokio::time::sleep(Duration::from_secs(16)).await;
+    // simulate a user not speaking for the first couple of seconds
+    simulate_long_pause(15).await;
 
     let audio_data = tokio::fs::read(PATH_TO_FILE).await.unwrap();
 
-    static SLICE_SIZE: usize = 250;
+    static SLICE_SIZE: usize = 500;
 
     // Simulate an audio stream by sending the contents of a file in chunks
     let mut slice_begin = 0;
@@ -150,6 +155,12 @@ async fn send_to_deepgram(stt: STT) -> Result<(), DeepgramError> {
         };
 
         slice_begin += SLICE_SIZE;
+
+        // Randomly simulate a user not speaking for a few seconds
+        let pause = rand::thread_rng().gen_range(0..10000);
+        if pause%2==0 && pause < 14 {
+            simulate_long_pause(pause).await;
+        }
     }
 
     // Tell Deepgram that we've finished sending audio data by sending a zero-byte message
@@ -158,4 +169,9 @@ async fn send_to_deepgram(stt: STT) -> Result<(), DeepgramError> {
     };
 
     Ok(())
+}
+
+async fn simulate_long_pause(pause: u64) {
+    info!("Simulating a pause of {} seconds", pause);
+    tokio::time::sleep(Duration::from_secs(pause)).await;
 }

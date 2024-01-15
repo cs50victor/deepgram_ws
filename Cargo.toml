@@ -9,10 +9,10 @@ edition = "2021"
 anyhow = "1.0.79"
 async-trait = "0.1.77"
 crossbeam-channel = "0.5.11"
-deepgram = { git = "https://github.com/cs50victor/deepgram-rust-sdk.git", branch = "live-fork" }
-ezsockets = { version = "0.6.1", features = ["rustls"] }
-futures = "0.3.30"
+deepgram = "0.4.0"
+ezsockets = { version = "0.6.1", features = ["rustls"] } # you might run into issues without this feature. I did
 log = "0.4.20"
 pretty_env_logger = "0.5.0"
+rand = "0.8.5"
 serde_json = "1.0.111"
 tokio = { version = "1.17.0", features = ["full"] }
